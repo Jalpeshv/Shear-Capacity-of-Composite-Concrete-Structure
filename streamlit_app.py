@@ -289,7 +289,7 @@ concrete_grade_MPa = st.sidebar.slider(
 )
 
 steel_fy_MPa = st.sidebar.slider(
-    "Steel Yield Strength fy,θ (MPa)",
+    "Ambient Steel Grade fy (MPa)",
     min_value=100, max_value=500, value=380, step=10
 )
 
@@ -393,6 +393,14 @@ eff_conc_exp = min(0.014, 1.84e-7 + (0.014 - 1.84e-7) * max(0.0, T_val - 20.0) /
 eff_steel_exp = min(0.0178, 0.0178 * max(0.0, T_val - 20.0) / 1180.0)
 eff_steel_cond = max(27.3, 53.33 - (53.33 - 27.3) * max(0.0, T_val - 20.0) / 1180.0)
 eff_conc_cond = min(2.0, 1.04 + (2.0 - 1.04) * max(0.0, T_val - 20.0) / 1180.0)
+
+# Display live degraded steel yield strength & concrete strength indicators in sidebar
+st.sidebar.caption(
+    f"🔥 **Degraded $f_{{y,\\theta}}$ at {T_val:.0f}ºC**: "
+    f"**{eff_fy:.1f} MPa** ($k_{{y,\\theta}} = {ky_factor:.2f}$)\n\n"
+    f"🧱 **Degraded $f_{{c,\\theta}}$ at {T_val:.0f}ºC**: "
+    f"**{eff_fc:.1f} MPa** ($k_{{c,\\theta}} = {kc_factor:.2f}$)"
+)
 
 for col in meta_info['feature_cols']:
     if 'Connector' in col:
