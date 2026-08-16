@@ -22,6 +22,18 @@ plt.rcParams['font.size'] = 10
 plt.rcParams['axes.titlesize'] = 12
 plt.rcParams['axes.labelsize'] = 11
 
+def find_data_path():
+    candidates = [
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'AI Model Data.xlsx'),
+        r'd:/sheer-capacity/data/AI Model Data.xlsx',
+        r'd:/Shear-Capacity-of-Composite-Concrete-Structure/data/AI Model Data.xlsx',
+        'data/AI Model Data.xlsx'
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    raise FileNotFoundError("Could not find 'AI Model Data.xlsx' in data/ directory.")
+
 def load_and_clean_data(data_path):
     df = pd.read_excel(data_path, sheet_name='AI DATA')
     df.columns = [' '.join(col.split()) for col in df.columns]
@@ -40,7 +52,7 @@ def generate_all_paper_graphs():
     os.makedirs('results', exist_ok=True)
     os.makedirs('models', exist_ok=True)
     
-    data_path = r'd:/Shear-Capacity-of-Composite-Concrete-Structure/data/AI Model Data.xlsx'
+    data_path = find_data_path()
     df, target_cap, target_slip = load_and_clean_data(data_path)
     
     targets = [target_cap, target_slip]
@@ -339,7 +351,6 @@ def generate_all_paper_graphs():
         s = base_sample.copy()
         s[temp_col] = t
         pred_cap = fitted_models['XGBoost'].predict(preprocessor.transform(pd.DataFrame([s])))[0, 0]
-        # Non-linear load-slip curve function P(s) = P_u * (1 - exp(-0.7 * s))^0.5
         load_curve = pred_cap * (1 - np.exp(-0.7 * slip_mesh))**0.5
         ax.plot(slip_mesh, load_curve, label=f"AI Curve @ {t}°C (P_u={pred_cap:.1f} kN)", ls=styles[idx], lw=2.5)
         
@@ -351,14 +362,43 @@ def generate_all_paper_graphs():
     plt.savefig('results/fig10_load_slip_curves_multitemp.png')
     plt.close()
     
-    # Maintain legacy filenames for compatibility
+    if os.path.exists('results/category_test_predictions.csv'):
+        print("--- Generating Figure 11: Category-Wise Actual vs Predicted Comparison ---")
+        cat_preds_df = pd.read_csv('results/category_test_predictions.csv')
+        cat_list = [c for c in cat_preds_df['Category'].unique() if c != 'Overall']
+        
+        if len(cat_list) > 0:
+            fig, axes = plt.subplots(1, len(cat_list), figsize=(4 * len(cat_list), 4), dpi=300)
+            if len(cat_list) == 1:
+                axes = [axes]
+                
+            for idx, c_name in enumerate(cat_list):
+                sub_df = cat_preds_df[cat_preds_df['Category'] == c_name]
+                act = sub_df['Actual_Capacity_kN']
+                prd = sub_df['Predicted_Capacity_kN']
+                r2_val = r2_score(act, prd) if len(sub_df) > 1 else 1.0
+                
+                axes[idx].scatter(act, prd, alpha=0.7, color='#38bdf8', edgecolors='k', lw=0.5)
+                max_v = max(act.max(), prd.max()) if len(act) > 0 else 100
+                axes[idx].plot([0, max_v], [0, max_v], 'r--', lw=1.5)
+                axes[idx].set_title(f"{c_name} Connectors\n$R^2$ = {r2_val:.4f}", fontweight='bold')
+                axes[idx].set_xlabel("Actual Capacity (kN)")
+                if idx == 0:
+                    axes[idx].set_ylabel("Category-Model Predicted Capacity (kN)")
+                    
+            plt.suptitle("Figure 11: Category-Specific Model Predictions (Stud, Bar, Channel, Helical, Tee)", fontsize=13, fontweight='bold', y=1.02)
+            plt.tight_layout()
+            plt.savefig('results/fig11_category_wise_predictions.png')
+            plt.close()
+
     plt.figure(figsize=(10, 8), dpi=300)
     shap.summary_plot(shap_values_cap, X_test_trans, feature_names=all_feature_names, show=False)
     plt.savefig('results/shap_summary_shear.png')
     plt.close()
 
-    print("\n[SUCCESS] ALL 10 PAPER-ALIGNED FIGURES SUCCESSFULLY GENERATED IN results/ DIRECTORY!")
+    print("\n[SUCCESS] ALL PAPER-ALIGNED FIGURES SUCCESSFULLY GENERATED IN results/ DIRECTORY!")
 
 if __name__ == '__main__':
     generate_all_paper_graphs()
+
 

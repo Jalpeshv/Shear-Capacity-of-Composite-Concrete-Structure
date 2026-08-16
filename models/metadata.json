@@ -55,5 +55,19 @@
         "Ultimate Shear Capacity (kN)",
         "Slip (mm)"
     ],
+    "categories": [
+        "Stud",
+        "Bar",
+        "Channel",
+        "Tee",
+        "Helical"
+    ],
+    "best_model_per_category": {
+        "Stud": "XGBoost",
+        "Bar": "XGBoost",
+        "Channel": "XGBoost",
+        "Tee": "XGBoost",
+        "Helical": "XGBoost"
+    },
     "best_model_name": "XGBoost"
 }
