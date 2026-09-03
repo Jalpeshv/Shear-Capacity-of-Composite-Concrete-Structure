@@ -14,15 +14,17 @@ import xgboost as xgb
 
 def find_data_path():
     candidates = [
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'AI Model Data.xlsx'),
+        r'd:\sheer-capacity\AI Model Data.xlsx',
         r'd:/sheer-capacity/data/AI Model Data.xlsx',
-        r'd:/Shear-Capacity-of-Composite-Concrete-Structure/data/AI Model Data.xlsx',
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'AI Model Data.xlsx'),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'AI Model Data.xlsx'),
+        'AI Model Data.xlsx',
         'data/AI Model Data.xlsx'
     ]
     for path in candidates:
         if os.path.exists(path):
             return path
-    raise FileNotFoundError("Could not find 'AI Model Data.xlsx' in data/ directory.")
+    raise FileNotFoundError("Could not find 'AI Model Data.xlsx'.")
 
 def load_and_preprocess_data(data_path):
     df = pd.read_excel(data_path, sheet_name='AI DATA')
