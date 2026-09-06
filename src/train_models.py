@@ -13,25 +13,20 @@ from sklearn.neural_network import MLPRegressor
 import xgboost as xgb
 
 def find_data_path():
-    candidates = [
-        r'd:\sheer-capacity\AI Model Data.xlsx',
-        r'd:/sheer-capacity/data/AI Model Data.xlsx',
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'AI Model Data.xlsx'),
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'AI Model Data.xlsx'),
-        'AI Model Data.xlsx',
-        'data/AI Model Data.xlsx'
-    ]
-    for path in candidates:
-        if os.path.exists(path):
-            return path
-    raise FileNotFoundError("Could not find 'AI Model Data.xlsx'.")
+    data_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "AI Model Data.xlsx"
+    )
+    if not os.path.exists(data_path):
+        raise FileNotFoundError(f"Required data file not found: {data_path}")
+    return data_path
 
 def load_and_preprocess_data(data_path):
     df = pd.read_excel(data_path, sheet_name='AI DATA')
-    
-    # Normalize column names across all scripts (remove internal newlines & extra spaces)
-    df.columns = [' '.join(col.split()) for col in df.columns]
-    
+
+    # Remove Excel line breaks and repeated whitespace without changing Unicode symbols.
+    df.columns = [' '.join(str(col).split()) for col in df.columns]
+
     # Strip whitespace from string values
     for col in df.select_dtypes(include=['object']).columns:
         df[col] = df[col].astype(str).str.strip()

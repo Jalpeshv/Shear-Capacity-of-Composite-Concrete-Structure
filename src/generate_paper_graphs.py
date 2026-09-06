@@ -16,29 +16,78 @@ from sklearn.neural_network import MLPRegressor
 import xgboost as xgb
 
 # Set global matplotlib style
-plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
+plt.style.use('seaborn-v0_8-white' if 'seaborn-v0_8-white' in plt.style.available else 'default')
 plt.rcParams['font.family'] = 'DejaVu Sans'
 plt.rcParams['font.size'] = 10
 plt.rcParams['axes.titlesize'] = 12
 plt.rcParams['axes.labelsize'] = 11
+plt.rcParams['axes.grid'] = False
+plt.rcParams['savefig.bbox'] = 'tight'
+plt.rcParams['savefig.pad_inches'] = 0.15
+
+def format_display_label(label):
+    """Keep source symbols while formatting display-only superscript/subscript notation."""
+    display_label = ' '.join(str(label).split())
+    replacements = {
+        'N/mm2': 'N/mm²',
+        'm-1C-1': 'm⁻¹°C⁻¹',
+        'W/mK': 'W/(mK)',
+        'J/kgK': 'J/(kg·K)',
+        '(fy, θ)': '($f_{y,\\theta}$)',
+        '(fp, θ)': '($f_{p,\\theta}$)',
+        '(Ea, θ)': '($E_{a,\\theta}$)',
+        '(ɛp, θ)': '($\\varepsilon_{p,\\theta}$)',
+        'fy,θ': '$f_{y,\\theta}$',
+        'fp,θ': '$f_{p,\\theta}$',
+        'Ea,θ': '$E_{a,\\theta}$',
+        'ɛp,θ': '$\\varepsilon_{p,\\theta}$',
+        '(ky,θ =fy,θ/fy)': '($k_{y,\\theta}=f_{y,\\theta}/f_y$)',
+        '(kE,θ =Ea,θ/Ea)': '($k_{E,\\theta}=E_{a,\\theta}/E_a$)',
+        'ky,θ =fy,θ/fy': '$k_{y,\\theta}=f_{y,\\theta}/f_y$',
+        'kE,θ =Ea,θ/Ea': '$k_{E,\\theta}=E_{a,\\theta}/E_a$',
+    }
+    for source, formatted in replacements.items():
+        display_label = display_label.replace(source, formatted)
+    return display_label
+
+def style_axes(axes):
+    for axis in np.atleast_1d(axes).flat:
+        axis.grid(False, which='both')
+        axis.tick_params(
+            axis='both',
+            direction='out',
+            length=10,
+            width=2,
+            colors='black',
+            labelsize=9
+        )
+        for spine in axis.spines.values():
+            spine.set_visible(True)
+            spine.set_color('black')
+            spine.set_linewidth(1.5)
+        axis.set_xlabel(format_display_label(axis.get_xlabel()))
+        axis.set_ylabel(format_display_label(axis.get_ylabel()))
+        axis.set_title(format_display_label(axis.get_title()))
+        legend = axis.get_legend()
+        if legend is not None:
+            legend.get_frame().set_edgecolor('black')
+            legend.get_frame().set_linewidth(1.0)
 
 def find_data_path():
-    candidates = [
-        r'd:\sheer-capacity\AI Model Data.xlsx',
-        r'd:/sheer-capacity/data/AI Model Data.xlsx',
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'AI Model Data.xlsx'),
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'AI Model Data.xlsx'),
-        'AI Model Data.xlsx',
-        'data/AI Model Data.xlsx'
-    ]
-    for path in candidates:
-        if os.path.exists(path):
-            return path
-    raise FileNotFoundError("Could not find 'AI Model Data.xlsx'.")
+    data_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "AI Model Data.xlsx"
+    )
+    if not os.path.exists(data_path):
+        raise FileNotFoundError(f"Required data file not found: {data_path}")
+    return data_path
 
 def load_and_clean_data(data_path):
     df = pd.read_excel(data_path, sheet_name='AI DATA')
-    df.columns = [' '.join(col.split()) for col in df.columns]
+
+    # Remove Excel line breaks and repeated whitespace without changing Unicode symbols.
+    df.columns = [' '.join(str(col).split()) for col in df.columns]
+
     for col in df.select_dtypes(include=['object']).columns:
         df[col] = df[col].astype(str).str.strip()
     
@@ -75,7 +124,7 @@ def generate_all_paper_graphs():
     )
     
     preprocessor.fit(X_train)
-    joblib.dump(preprocessor, 'models/preprocessor.joblib')
+    joblib.dump(preprocessor, 'models/paper_graphs_preprocessor.joblib')
     
     X_train_trans = preprocessor.transform(X_train)
     X_test_trans = preprocessor.transform(X_test)
@@ -101,19 +150,33 @@ def generate_all_paper_graphs():
             'test': model.predict(X_test_trans)
         }
         fitted_models[name] = model
-        joblib.dump(model, f'models/{name.lower()}_model.joblib')
-        
-    joblib.dump(fitted_models['XGBoost'], 'models/best_model.joblib')
+        joblib.dump(model, f'models/paper_graphs_{name.lower()}_model.joblib')
     
     print("--- Generating Figure 1: Pearson Correlation Matrix ---")
     numeric_df = df.select_dtypes(include=[np.number])
-    plt.figure(figsize=(14, 11), dpi=300)
+    fig1, ax1 = plt.subplots(figsize=(14, 11), dpi=300)
     corr = numeric_df.corr()
     mask = np.triu(np.ones_like(corr, dtype=bool))
-    sns.heatmap(corr, mask=mask, annot=False, cmap='coolwarm', vmin=-1, vmax=1, linewidths=0.5, cbar_kws={'shrink': 0.8})
-    plt.title("Figure 1: Pearson Correlation Coefficient Matrix (Parameters vs Targets)", fontsize=13, pad=15, fontweight='bold')
-    plt.tight_layout()
-    plt.savefig('results/fig1_pearson_correlation_matrix.png')
+    display_labels = [format_display_label(column) for column in numeric_df.columns]
+    sns.heatmap(
+        corr,
+        mask=mask,
+        annot=False,
+        cmap='coolwarm',
+        vmin=-1,
+        vmax=1,
+        linewidths=0.5,
+        cbar_kws={'shrink': 0.8},
+        xticklabels=display_labels,
+        yticklabels=display_labels,
+        ax=ax1
+    )
+    ax1.set_xticklabels(display_labels, rotation=90, ha='center', fontsize=9)
+    ax1.set_yticklabels(display_labels, rotation=0, fontsize=9)
+    fig1.suptitle("Figure 1: Pearson Correlation Coefficient Matrix (Parameters vs Targets)", fontsize=13, y=0.985, fontweight='bold')
+    style_axes(fig1.axes)
+    fig1.tight_layout(rect=[0, 0, 1, 0.95])
+    fig1.savefig('results/fig1_pearson_correlation_matrix.png', bbox_inches='tight', pad_inches=0.15)
     plt.close()
     
     print("--- Generating Figure 2: Actual vs Predicted All Models ---")
@@ -146,12 +209,13 @@ def generate_all_paper_graphs():
             axes[1, i].set_ylabel("Predicted Slip (mm)")
             
     plt.suptitle("Figure 2: Actual vs. Predicted Performance Across AI Algorithms (Testing Phase)", fontsize=14, fontweight='bold', y=0.98)
+    style_axes(axes)
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig('results/fig2_actual_vs_predicted_all_models.png')
     plt.close()
     
     print("--- Generating Figure 3: Testing Predictions Sample Tracking ---")
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), dpi=300)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 12), dpi=300)
     samples = np.arange(len(y_test))
     
     ax1.plot(samples, y_test.iloc[:, 0].values, 'k-o', label='Experimental / Actual', lw=1.5, ms=4)
@@ -159,7 +223,8 @@ def generate_all_paper_graphs():
     ax1.plot(samples, predictions['RandomForest']['test'][:, 0], 'g--^', label='RandomForest Predicted', lw=1.0, ms=3, alpha=0.7)
     ax1.set_ylabel("Ultimate Shear Capacity (kN)", fontweight='bold')
     ax1.set_title("Testing Specimen Tracking - Shear Capacity Prediction Comparison", fontweight='bold')
-    ax1.legend(loc='upper right')
+    ax1.set_ylim(0, 800)
+    ax1.legend(loc='upper right', borderaxespad=0.6)
     
     ax2.plot(samples, y_test.iloc[:, 1].values, 'k-o', label='Experimental / Actual', lw=1.5, ms=4)
     ax2.plot(samples, predictions['XGBoost']['test'][:, 1], 'b--s', label='XGBoost Predicted', lw=1.2, ms=3)
@@ -167,10 +232,12 @@ def generate_all_paper_graphs():
     ax2.set_xlabel("Test Specimen Sample Index", fontweight='bold')
     ax2.set_ylabel("Slip (mm)", fontweight='bold')
     ax2.set_title("Testing Specimen Tracking - Slip Prediction Comparison", fontweight='bold')
-    ax2.legend(loc='upper right')
+    ax2.set_ylim(0, 160)
+    ax2.legend(loc='upper right', borderaxespad=0.6)
     
-    plt.tight_layout()
-    plt.savefig('results/fig3_sample_testing_predictions_tracking.png')
+    style_axes((ax1, ax2))
+    fig.tight_layout(rect=[0, 0, 1, 1])
+    fig.savefig('results/fig3_sample_testing_predictions_tracking.png')
     plt.close()
     
     print("--- Generating Figure 4: Parametric Temperature Degradation ---")
@@ -181,8 +248,9 @@ def generate_all_paper_graphs():
     base_sample = X.iloc[0].copy()
     temp_col = [c for c in num_cols if 'Temperature' in c][0]
     
-    plt.figure(figsize=(10, 6), dpi=300)
+    fig4, ax4 = plt.subplots(figsize=(10, 6), dpi=300)
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+    curve_max = 0.0
     
     for idx, conn in enumerate(unique_connectors):
         synth_data = []
@@ -194,15 +262,25 @@ def generate_all_paper_graphs():
         synth_df = pd.DataFrame(synth_data)
         synth_trans = preprocessor.transform(synth_df)
         preds = fitted_models['XGBoost'].predict(synth_trans)
-        plt.plot(temp_range, preds[:, 0], label=f"Connector: {conn}", color=colors[idx % len(colors)], lw=2.5)
+        curve_max = max(curve_max, float(np.max(preds[:, 0])))
+        ax4.plot(temp_range, preds[:, 0], label=f"Connector: {conn}", color=colors[idx % len(colors)], lw=2.5)
         
-    plt.xlabel("Temperature (°C)", fontweight='bold')
-    plt.ylabel("Predicted Residual Shear Capacity (kN)", fontweight='bold')
-    plt.title("Figure 4: Thermal Degradation Curves of Composite Connectors (20°C to 800°C)", fontsize=12, fontweight='bold')
-    plt.legend(title="Connector Type")
-    plt.tight_layout()
-    plt.savefig('results/fig4_parametric_temperature_degradation.png')
-    plt.close()
+    ax4.set_xlabel("Temperature (°C)", fontweight='bold')
+    ax4.set_ylabel("Predicted Residual Shear Capacity (kN)", fontweight='bold')
+    ax4.set_title("Figure 4: Thermal Degradation Curves of Composite Connectors (20°C to 800°C)", fontsize=12, fontweight='bold')
+    ax4.set_ylim(0, max(130.0, curve_max * 1.1))
+    ax4.legend(
+        title="Connector Type",
+        loc='center right',
+        frameon=True,
+        facecolor='white',
+        framealpha=0.92,
+        borderaxespad=0.6
+    )
+    style_axes(ax4)
+    fig4.tight_layout()
+    fig4.savefig('results/fig4_parametric_temperature_degradation.png')
+    plt.close(fig4)
     
     print("--- Generating Figure 5: Parametric Connector Geometry ---")
     height_col = [c for c in num_cols if 'Height' in c][0]
@@ -247,6 +325,7 @@ def generate_all_paper_graphs():
     axes[1].legend()
     
     plt.suptitle("Figure 5: Influence of Connector Geometry on Shear Capacity", fontsize=13, fontweight='bold')
+    style_axes(axes)
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig('results/fig5_parametric_connector_geometry.png')
     plt.close()
@@ -290,6 +369,7 @@ def generate_all_paper_graphs():
     axes[1].legend()
     
     plt.suptitle("Figure 6: Influence of Material Strengths on Structural Capacity", fontsize=13, fontweight='bold')
+    style_axes(axes)
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig('results/fig6_parametric_material_strengths.png')
     plt.close()
@@ -306,6 +386,7 @@ def generate_all_paper_graphs():
         axes[idx].set_ylabel("Frequency")
         
     plt.suptitle("Figure 7: Residual Error Distributions (Shear Capacity Prediction)", fontsize=13, fontweight='bold')
+    style_axes(axes)
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig('results/fig7_residual_error_distributions.png')
     plt.close()
@@ -320,6 +401,7 @@ def generate_all_paper_graphs():
     plt.figure(figsize=(10, 8), dpi=300)
     shap.summary_plot(shap_values_cap, X_test_trans, feature_names=all_feature_names, show=False)
     plt.title("Figure 8: SHAP Feature Importance Summary - Ultimate Shear Capacity (kN)", fontsize=12, pad=15, fontweight='bold')
+    style_axes(plt.gcf().axes)
     plt.tight_layout()
     plt.savefig('results/fig8_shap_summary_and_feature_importance.png')
     plt.close()
@@ -333,11 +415,16 @@ def generate_all_paper_graphs():
     for idx, f_idx in enumerate(top_feature_idx):
         feature_name = all_feature_names[f_idx]
         axes[idx].scatter(X_test_trans[:, f_idx], shap_values_cap.values[:, f_idx], alpha=0.7, c='#1f77b4', edgecolors='k', lw=0.3)
-        axes[idx].set_title(f"SHAP Dependence: {feature_name}", fontweight='bold')
-        axes[idx].set_xlabel(f"Standardized {feature_name}")
+        display_name = format_display_label(feature_name)
+        axes[idx].set_title(f"SHAP Dependence: {display_name}", fontweight='bold')
+        axes[idx].set_xlabel(f"Standardized {display_name}")
         axes[idx].set_ylabel("SHAP Value (Impact on Capacity)")
+    shap_limit = max(1.0, float(np.max(np.abs(shap_values_cap.values))) * 1.1)
+    for axis in axes:
+        axis.set_ylim(-shap_limit, shap_limit)
         
     plt.suptitle("Figure 9: SHAP Dependence Plots for Top 4 Dominant Parameters", fontsize=13, fontweight='bold')
+    style_axes(axes)
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig('results/fig9_shap_dependence_plots.png')
     plt.close()
@@ -360,6 +447,7 @@ def generate_all_paper_graphs():
     ax.set_ylabel("Shear Force $V$ (kN)", fontweight='bold')
     ax.set_title("Figure 10: Non-Linear Thermo-Structural Load-Slip Curves across Temperatures", fontsize=12, fontweight='bold')
     ax.legend()
+    style_axes(ax)
     plt.tight_layout()
     plt.savefig('results/fig10_load_slip_curves_multitemp.png')
     plt.close()
@@ -389,12 +477,14 @@ def generate_all_paper_graphs():
                     axes[idx].set_ylabel("Category-Model Predicted Capacity (kN)")
                     
             plt.suptitle("Figure 11: Category-Specific Model Predictions (Stud, Bar, Channel, Helical, Tee)", fontsize=13, fontweight='bold', y=1.02)
+            style_axes(axes)
             plt.tight_layout()
             plt.savefig('results/fig11_category_wise_predictions.png')
             plt.close()
 
     plt.figure(figsize=(10, 8), dpi=300)
     shap.summary_plot(shap_values_cap, X_test_trans, feature_names=all_feature_names, show=False)
+    style_axes(plt.gcf().axes)
     plt.savefig('results/shap_summary_shear.png')
     plt.close()
 
