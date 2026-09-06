@@ -30,9 +30,10 @@ def format_display_label(label):
     display_label = ' '.join(str(label).split())
     replacements = {
         'N/mm2': 'N/mm²',
-        'm-1C-1': 'm⁻¹°C⁻¹',
+        'm-1C-1': 'm⁻¹C⁻¹',
         'W/mK': 'W/(mK)',
         'J/kgK': 'J/(kg·K)',
+        'relative to fy': 'relative to fᵧ',
         '(fy, θ)': '($f_{y,\\theta}$)',
         '(fp, θ)': '($f_{p,\\theta}$)',
         '(Ea, θ)': '($E_{a,\\theta}$)',
@@ -41,10 +42,12 @@ def format_display_label(label):
         'fp,θ': '$f_{p,\\theta}$',
         'Ea,θ': '$E_{a,\\theta}$',
         'ɛp,θ': '$\\varepsilon_{p,\\theta}$',
-        '(ky,θ =fy,θ/fy)': '($k_{y,\\theta}=f_{y,\\theta}/f_y$)',
-        '(kE,θ =Ea,θ/Ea)': '($k_{E,\\theta}=E_{a,\\theta}/E_a$)',
-        'ky,θ =fy,θ/fy': '$k_{y,\\theta}=f_{y,\\theta}/f_y$',
-        'kE,θ =Ea,θ/Ea': '$k_{E,\\theta}=E_{a,\\theta}/E_a$',
+        # '(ky,θ =fy,θ/fy)': '($k_{y,\\theta}=f_{y,\\theta}/f_y$)',
+        # '(kE,θ =Ea,θ/Ea)': '($k_{E,\\theta}=E_{a,\\theta}/E_a$)',
+        # 'ky,θ =fy,θ/fy': '$k_{y,\\theta}=f_{y,\\theta}/f_y$',
+        # 'kE,θ =Ea,θ/Ea': '$k_{E,\\theta}=E_{a,\\theta}/E_a$',
+        'k_{y,\\theta}=f_{y,\\theta}/f_y': '$k_{y,\\theta}=f_{y,\\theta}/f_y$',
+        'k_{E,\\theta}=E_{a,\\theta}/E_a': '$k_{E,\\theta}=E_{a,\\theta}/E_a$'
     }
     for source, formatted in replacements.items():
         display_label = display_label.replace(source, formatted)
@@ -56,7 +59,7 @@ def style_axes(axes):
         axis.tick_params(
             axis='both',
             direction='out',
-            length=10,
+            length=5,
             width=2,
             colors='black',
             labelsize=9
