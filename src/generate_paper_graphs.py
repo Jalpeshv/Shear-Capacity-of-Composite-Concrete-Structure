@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import joblib
 import numpy as np
 import pandas as pd
@@ -26,10 +27,20 @@ plt.rcParams['savefig.bbox'] = 'tight'
 plt.rcParams['savefig.pad_inches'] = 0.15
 
 def format_display_label(label):
-    """Keep source symbols while formatting display-only superscript/subscript notation."""
+    """Format the label text into consistent math-style notation for the report figures."""
     display_label = ' '.join(str(label).split())
+    display_label = display_label.replace('\\underline{\\circ}C', '°C')
+    display_label = display_label.replace('\\underline{°C}', '°C')
+    display_label = display_label.replace('\\underline{C}', 'C')
+    display_label = re.sub(r'\\underline\s*\{([^{}]*)\}', r'\1', display_label)
+    display_label = display_label.replace('ºC', '°C').replace('° C', '°C').replace('°C', '°C')
+    display_label = display_label.replace('$\\circ$', '°').replace('\\circ', '°').replace('\\textdegree', '°')
+    display_label = display_label.replace('{°}', '°').replace('° C', '°C').replace('(°', '(°')
+    display_label = display_label.replace('\\circ C', '°C').replace('\\circC', '°C')
+
     replacements = {
         'N/mm2': 'N/mm²',
+        'ºC': '°C',
         'm-1C-1': 'm⁻¹C⁻¹',
         'W/mK': 'W/(mK)',
         'J/kgK': 'J/(kg·K)',
@@ -42,15 +53,27 @@ def format_display_label(label):
         'fp,θ': '$f_{p,\\theta}$',
         'Ea,θ': '$E_{a,\\theta}$',
         'ɛp,θ': '$\\varepsilon_{p,\\theta}$',
-        # '(ky,θ =fy,θ/fy)': '($k_{y,\\theta}=f_{y,\\theta}/f_y$)',
-        # '(kE,θ =Ea,θ/Ea)': '($k_{E,\\theta}=E_{a,\\theta}/E_a$)',
-        # 'ky,θ =fy,θ/fy': '$k_{y,\\theta}=f_{y,\\theta}/f_y$',
-        # 'kE,θ =Ea,θ/Ea': '$k_{E,\\theta}=E_{a,\\theta}/E_a$',
-        'k_{y,\\theta}=f_{y,\\theta}/f_y': '$k_{y,\\theta}=f_{y,\\theta}/f_y$',
-        'k_{E,\\theta}=E_{a,\\theta}/E_a': '$k_{E,\\theta}=E_{a,\\theta}/E_a$'
     }
     for source, formatted in replacements.items():
         display_label = display_label.replace(source, formatted)
+
+    display_label = display_label.replace('ky, θ = fy, θ / fy', '($k_{y,\\theta}=f_{y,\\theta}/f_{y}$)')
+    display_label = display_label.replace('ky,θ =fy,θ/fy', '($k_{y,\\theta}=f_{y,\\theta}/f_{y}$)')
+    display_label = display_label.replace('kE, θ = Ea, θ / Ea', '($k_{E,\\theta}=E_{a,\\theta}/E_{a}$)')
+    display_label = display_label.replace('kE,θ =Ea,θ/Ea', '($k_{E,\\theta}=E_{a,\\theta}/E_{a}$)')
+
+    display_label = re.sub(r'ky\s*[, ]\s*θ', r'$k_{y,\\theta}$', display_label, flags=re.IGNORECASE)
+    display_label = re.sub(r'kE\s*[, ]\s*θ', r'$k_{E,\\theta}$', display_label, flags=re.IGNORECASE)
+    display_label = re.sub(r'fy\s*[, ]\s*θ', r'$f_{y,\\theta}$', display_label, flags=re.IGNORECASE)
+    display_label = re.sub(r'Ea\s*[, ]\s*θ', r'$E_{a,\\theta}$', display_label, flags=re.IGNORECASE)
+    display_label = re.sub(r'fp\s*[, ]\s*θ', r'$f_{p,\\theta}$', display_label, flags=re.IGNORECASE)
+    display_label = re.sub(r'ɛp\s*[, ]\s*θ', r'$\\varepsilon_{p,\\theta}$', display_label, flags=re.IGNORECASE)
+
+    display_label = display_label.replace('/fy', '/f_{y}')
+    display_label = display_label.replace('/Ea', '/E_{a}')
+    display_label = display_label.replace('/f_{y}$)', '/f_{y}$)')
+    display_label = display_label.replace('/E_{a}$)', '/E_{a}$)')
+
     return display_label
 
 def style_axes(axes):
@@ -91,7 +114,7 @@ def load_and_clean_data(data_path):
     # Remove Excel line breaks and repeated whitespace without changing Unicode symbols.
     df.columns = [' '.join(str(col).split()) for col in df.columns]
 
-    for col in df.select_dtypes(include=['object']).columns:
+    for col in df.select_dtypes(include='object').columns:
         df[col] = df[col].astype(str).str.strip()
     
     grade_col = [col for col in df.columns if 'Concrete' in col and 'Grade' in col][0]
@@ -401,8 +424,10 @@ def generate_all_paper_graphs():
     explainer_cap = shap.TreeExplainer(xgb_cap)
     shap_values_cap = explainer_cap(X_test_trans)
     
+    formatted_feature_names = [format_display_label(feature_name) for feature_name in all_feature_names]
+
     plt.figure(figsize=(10, 8), dpi=300)
-    shap.summary_plot(shap_values_cap, X_test_trans, feature_names=all_feature_names, show=False)
+    shap.summary_plot(shap_values_cap, X_test_trans, feature_names=formatted_feature_names, show=False)
     plt.title("Figure 8: SHAP Feature Importance Summary - Ultimate Shear Capacity (kN)", fontsize=12, pad=15, fontweight='bold')
     style_axes(plt.gcf().axes)
     plt.tight_layout()
@@ -486,7 +511,7 @@ def generate_all_paper_graphs():
             plt.close()
 
     plt.figure(figsize=(10, 8), dpi=300)
-    shap.summary_plot(shap_values_cap, X_test_trans, feature_names=all_feature_names, show=False)
+    shap.summary_plot(shap_values_cap, X_test_trans, feature_names=formatted_feature_names, show=False)
     style_axes(plt.gcf().axes)
     plt.savefig('results/shap_summary_shear.png')
     plt.close()
